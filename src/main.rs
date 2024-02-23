@@ -71,6 +71,7 @@ impl EncodedText {
         let mut sentences = 0;
         let mut encoded_sentences = 0;
         let mut is_sentence_encoded = false;
+
         for (byte, &encoded) in self.text.bytes().zip(&self.encoded) {
             if !is_sentence_encoded && encoded {
                 is_sentence_encoded = true;
@@ -91,19 +92,22 @@ impl EncodedText {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
+    // Assumption: For each given path there exists a txt and csv file
     for mut path in args.paths {
+        // Read text from file
         path.set_extension("txt");
         let text = read_to_string(&path)?;
         let mut encoded_text = EncodedText::from_text(text);
 
+        // Read encoded segments and set as encoded in encoded_text
         path.set_extension("csv");
-        let mut rdr = ReaderBuilder::new().delimiter(b';').from_path(&path)?;
-
-        for result in rdr.deserialize() {
+        let mut reader = ReaderBuilder::new().delimiter(b';').from_path(&path)?;
+        for result in reader.deserialize() {
             let record: Record = result?;
             encoded_text.set_encoding(&record.segment);
         }
 
+        // Print out results
         let (sentences, encoded_sentences) = encoded_text.get_sentence_data();
         println!("\n{}:", path.file_stem().unwrap().to_str().unwrap());
         println!("  Encoded sentences: {}", encoded_sentences);
