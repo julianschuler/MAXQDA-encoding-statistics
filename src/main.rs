@@ -107,6 +107,10 @@ fn main() -> Result<(), Error> {
     let (sentences, encoded_sentences) = encoded_text.get_sentence_data();
     println!("Encoded sentences: {}", encoded_sentences);
     println!("Total sentences: {}", sentences);
+    println!(
+        "Encoding percentage: {:.2}%",
+        100.0 * encoded_sentences as f32 / sentences as f32
+    );
 
     Ok(())
 }
