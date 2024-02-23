@@ -53,15 +53,18 @@ struct EncodedText {
 impl EncodedText {
     fn from_text(text: String) -> Self {
         let encoded = vec![false; text.len()];
+        let text = text.replace("\r", "");
 
         Self { text, encoded }
     }
 
     fn set_encoding(&mut self, segment: &str) {
-        if let Some(start) = self.text.find(segment) {
+        if let Some(start) = self.text.find(&segment) {
             for i in start..start + segment.len() {
                 self.encoded[i] = true;
             }
+        } else {
+            eprintln!("unable to find '{segment}'")
         }
     }
 
@@ -76,7 +79,8 @@ impl EncodedText {
             if byte == b'.' {
                 sentences += 1;
                 if is_sentence_encoded {
-                    encoded_sentences += 1
+                    encoded_sentences += 1;
+                    is_sentence_encoded = false;
                 }
             }
         }
