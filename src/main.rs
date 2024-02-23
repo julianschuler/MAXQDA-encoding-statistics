@@ -2,34 +2,12 @@ use std::{fs::read_to_string, io::Error, path::PathBuf};
 
 use clap::Parser;
 use csv::ReaderBuilder;
-use regex::Regex;
 use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 struct Args {
     text: PathBuf,
     encoding: PathBuf,
-}
-
-struct Position {
-    page: usize,
-    offset: usize,
-}
-
-impl<'de> Deserialize<'de> for Position {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let string = String::deserialize(deserializer)?;
-        let regex = Regex::new(r"(?<page>[0-9]+): (?<offset>[0-9]+)").unwrap();
-        let capture = regex.captures(&string).unwrap();
-
-        Ok(Position {
-            page: usize::from_str_radix(&capture["page"], 10).unwrap(),
-            offset: usize::from_str_radix(&capture["offset"], 10).unwrap(),
-        })
-    }
 }
 
 #[derive(Deserialize)]
@@ -46,9 +24,9 @@ struct Record {
     #[serde(rename = "Code")]
     code: String,
     #[serde(rename = "Anfang")]
-    start: Position,
+    start: String,
     #[serde(rename = "Ende")]
-    end: Position,
+    end: String,
     #[serde(rename = "Gewicht")]
     weight: u32,
     #[serde(rename = "Segment")]
@@ -67,40 +45,24 @@ struct Record {
     coverage: String,
 }
 
-struct Page {
-    number: usize,
-    offset: usize,
+struct EncodedText {
     text: String,
     encoded: Vec<bool>,
 }
 
-impl Page {
-    fn from_segment(segment: &str) -> Self {
-        let regex =
-            Regex::new(r"(?<text>(?s)^.*)\(.*, S\. (?<page>\d+): (?<offset>\d+)\)").unwrap();
-        let capture = regex.captures(segment).unwrap();
-        let text = capture["text"].to_owned();
-
+impl EncodedText {
+    fn from_text(text: String) -> Self {
         let encoded = vec![false; text.len()];
 
-        Page {
-            number: usize::from_str_radix(&capture["page"], 10).unwrap(),
-            offset: usize::from_str_radix(&capture["offset"], 10).unwrap(),
-            text,
-            encoded,
-        }
+        Self { text, encoded }
     }
 
-    fn set_encoded_range(&mut self, segment: &str) {
+    fn set_encoding(&mut self, segment: &str) {
         if let Some(start) = self.text.find(segment) {
             for i in start..start + segment.len() {
                 self.encoded[i] = true;
-                // print!("{}", chars.next().unwrap());
             }
-            // println!("\n");
         }
-
-        // let mut chars = self.text.chars().skip(start.offset - self.offset);
     }
 
     fn get_sentence_data(&self) -> (usize, usize) {
@@ -126,13 +88,8 @@ impl Page {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let mut pages = Vec::new();
     let text = read_to_string(args.text)?;
-    for segment in text.split("\r\n\r\n") {
-        pages.push(Page::from_segment(segment));
-    }
-
-    let first_page = pages.first().unwrap().number;
+    let mut encoded_text = EncodedText::from_text(text);
 
     let mut rdr = ReaderBuilder::new()
         .delimiter(b';')
@@ -140,23 +97,12 @@ fn main() -> Result<(), Error> {
 
     for result in rdr.deserialize() {
         let record: Record = result?;
-
-        assert_eq!(record.start.page, record.end.page);
-
-        let current_page = pages.get_mut(record.start.page - first_page).unwrap();
-        current_page.set_encoded_range(&record.segment);
+        encoded_text.set_encoding(&record.segment);
     }
 
-    let mut all_sentences = 0;
-    let mut all_encoded_sentences = 0;
-    for page in pages {
-        let (sentences, encoded_sentences) = page.get_sentence_data();
-
-        all_sentences += sentences;
-        all_encoded_sentences += encoded_sentences;
-    }
-
-    dbg!(all_encoded_sentences, all_sentences);
+    let (sentences, encoded_sentences) = encoded_text.get_sentence_data();
+    println!("Encoded sentences: {}", encoded_sentences);
+    println!("Total sentences: {}", sentences);
 
     Ok(())
 }
