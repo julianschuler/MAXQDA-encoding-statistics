@@ -6,8 +6,7 @@ use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 struct Args {
-    text: PathBuf,
-    encoding: PathBuf,
+    paths: Vec<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -92,25 +91,28 @@ impl EncodedText {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let text = read_to_string(args.text)?;
-    let mut encoded_text = EncodedText::from_text(text);
+    for mut path in args.paths {
+        path.set_extension("txt");
+        let text = read_to_string(&path)?;
+        let mut encoded_text = EncodedText::from_text(text);
 
-    let mut rdr = ReaderBuilder::new()
-        .delimiter(b';')
-        .from_path(args.encoding)?;
+        path.set_extension("csv");
+        let mut rdr = ReaderBuilder::new().delimiter(b';').from_path(&path)?;
 
-    for result in rdr.deserialize() {
-        let record: Record = result?;
-        encoded_text.set_encoding(&record.segment);
+        for result in rdr.deserialize() {
+            let record: Record = result?;
+            encoded_text.set_encoding(&record.segment);
+        }
+
+        let (sentences, encoded_sentences) = encoded_text.get_sentence_data();
+        println!("\n{}:", path.file_stem().unwrap().to_str().unwrap());
+        println!("  Encoded sentences: {}", encoded_sentences);
+        println!("  Total sentences: {}", sentences);
+        println!(
+            "  Encoding percentage: {:.2}%",
+            100.0 * encoded_sentences as f32 / sentences as f32
+        );
     }
-
-    let (sentences, encoded_sentences) = encoded_text.get_sentence_data();
-    println!("Encoded sentences: {}", encoded_sentences);
-    println!("Total sentences: {}", sentences);
-    println!(
-        "Encoding percentage: {:.2}%",
-        100.0 * encoded_sentences as f32 / sentences as f32
-    );
 
     Ok(())
 }
