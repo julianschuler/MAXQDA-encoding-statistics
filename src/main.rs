@@ -77,11 +77,11 @@ struct Page {
 impl Page {
     fn from_segment(segment: &str) -> Self {
         let regex =
-            Regex::new(r"(?<text>(?s)^.*) \(.*, S\. (?<page>\d+): (?<offset>\d+)\)").unwrap();
+            Regex::new(r"(?<text>(?s)^.*)\(.*, S\. (?<page>\d+): (?<offset>\d+)\)").unwrap();
         let capture = regex.captures(segment).unwrap();
         let text = capture["text"].to_owned();
 
-        let encoded = vec![false; text.chars().count()];
+        let encoded = vec![false; text.len()];
 
         Page {
             number: usize::from_str_radix(&capture["page"], 10).unwrap(),
@@ -91,27 +91,27 @@ impl Page {
         }
     }
 
-    fn set_encoded_range(&mut self, start: Position, end: Position) {
-        assert_eq!(self.number, start.page);
-        assert_eq!(self.number, end.page);
-
-        let mut chars = self.text.chars().skip(start.offset - self.offset);
-        for i in start.offset..=end.offset {
-            self.encoded[i - self.offset] = true;
-            print!("{}", chars.next().unwrap());
+    fn set_encoded_range(&mut self, segment: &str) {
+        if let Some(start) = self.text.find(segment) {
+            for i in start..start + segment.len() {
+                self.encoded[i] = true;
+                // print!("{}", chars.next().unwrap());
+            }
+            // println!("\n");
         }
-        println!("\n");
+
+        // let mut chars = self.text.chars().skip(start.offset - self.offset);
     }
 
     fn get_sentence_data(&self) -> (usize, usize) {
         let mut sentences = 0;
         let mut encoded_sentences = 0;
         let mut is_sentence_encoded = false;
-        for (i, char) in self.text.chars().enumerate() {
-            if !is_sentence_encoded && self.encoded[i] {
+        for (byte, &encoded) in self.text.bytes().zip(&self.encoded) {
+            if !is_sentence_encoded && encoded {
                 is_sentence_encoded = true;
             }
-            if char == '.' || i == self.encoded.len() - 1 {
+            if byte == b'.' {
                 sentences += 1;
                 if is_sentence_encoded {
                     encoded_sentences += 1
@@ -144,7 +144,7 @@ fn main() -> Result<(), Error> {
         assert_eq!(record.start.page, record.end.page);
 
         let current_page = pages.get_mut(record.start.page - first_page).unwrap();
-        current_page.set_encoded_range(record.start, record.end)
+        current_page.set_encoded_range(&record.segment);
     }
 
     let mut all_sentences = 0;
